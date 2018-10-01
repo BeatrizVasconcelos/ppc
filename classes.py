@@ -1,3 +1,6 @@
+from collections import deque
+
+
 # Classe Vehicle
 class Vehicle:
     def __init__(self, time):
@@ -10,14 +13,20 @@ class Car(Vehicle):
         super().__init__(10)
 
 
+# Classe Truck que herda de Vehicle
+class Truck(Vehicle):
+    def __init__(self):
+        super().__init__(20)
+
+
 # Classe Bridge
 class Bridge:
     def __init__(self):
-        self.vehicles = []
+        self.vehicles = deque([])
         self.direction = 'left'
 
     def change_direction(self):
         if(self.direction == 'left'):
-            self.direction == 'right'
+            self.direction = 'right'
         else:
-            self.direction == 'left'
+            self.direction = 'left'
