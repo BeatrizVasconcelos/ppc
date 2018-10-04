@@ -9,7 +9,10 @@ import classes
 left = deque([])
 right = deque([])
 bridge = classes.Bridge()
-waiting_times = []
+waiting_left = []
+waiting_right = []
+timing = 0
+program_end = False
 MAX_CARS = 100
 
 
@@ -29,7 +32,7 @@ def thread_bridge(cv_bridge, cv_queue):
                     print('Waiting right queue car')
                     cv_queue.wait()
             car, timing = right.popleft()
-            waiting_times.append(time.time() - timing)
+            waiting_right.append(time.time() - timing)
             print('Right queue car got into the bridge')
         # Espera até que um carro entre na fila esquerda e,
         # quando entra, o coloca na ponte
@@ -39,7 +42,7 @@ def thread_bridge(cv_bridge, cv_queue):
                     print('Waiting left queue car')
                     cv_queue.wait()
             car, timing = left.popleft()
-            waiting_times.append(time.time() - timing)
+            waiting_left.append(time.time() - timing)
             print('Left queue car got into the bridge')
         # Quando um carro é inserido na ponte, a thread bridge
         # notifica a thread remove_cars
@@ -69,17 +72,35 @@ def thread_bridge(cv_bridge, cv_queue):
 
 # Função que gera carros
 def thread_queue(cv_queue):
-    for i in range(MAX_CARS):
+    directions = [0, 1]
+    qt_right = 0
+    qt_left = 0
+    while(True):
         car = classes.Car()
         # Gera uma direção (0 = esquerda, 1 = direita) aleatoriamente
-        direction = i % 2
+        if(len(directions) == 0):
+            break
+        i = randint(0, len(directions) - 1)
+        direction = directions[i]
         tup = (car, time.time())
         if(direction == 1):
             right.append(tup)
+            qt_right += 1
             print('Car inserted on right queue\n')
+            if(qt_right >= (MAX_CARS / 2)):
+                try:
+                    directions.remove(1)
+                except ValueError:
+                    pass
         else:
             left.append(tup)
+            qt_left += 1
             print('Car inserted on left queue\n')
+            if(qt_left >= (MAX_CARS / 2)):
+                try:
+                    directions.remove(0)
+                except ValueError:
+                    pass
         # Notifica todas as threads após inserir um carro em uma das filas
         with(cv_queue):
             cv_queue.notify_all()
@@ -112,26 +133,72 @@ def thread_remove_cars(cv_bridge):
             break
 
 
-def results():
+def thread_time_calculator(cv_bridge):
+    global timing
+    while(True):
+        while(len(bridge.vehicles) == 0 and not program_end):
+            with(cv_bridge):
+                cv_bridge.wait()
+
+        init = time.time()
+        while(len(bridge.vehicles) >= 1 and not program_end):
+            with(cv_bridge):
+                cv_bridge.wait()
+        using_time = time.time() - init
+        timing += using_time
+        if(program_end):
+            print('Thread time calculator encerrou')
+            break
+
+
+def results(program_time):
+    program_time = time.time()
     print('Número total de carros que atravessaram: {}'.format(MAX_CARS))
-    print('Tempo de espera:')
-    print('Máximo: {}'.format(max(waiting_times)))
-    print('Mínimo: {}'.format(min(waiting_times)))
-    print('Média: {}'.format(np.mean(waiting_times)))
+
+    print('Tempo de espera (fila esquerda):')
+    print('Máximo: {}'.format(max(waiting_left)))
+    print('Mínimo: {}'.format(min(waiting_left)))
+    print('Média: {}'.format(np.mean(waiting_left)))
+
+    print('\nTempo de espera (fila direita):')
+    print('Máximo: {}'.format(max(waiting_right)))
+    print('Mínimo: {}'.format(min(waiting_right)))
+    print('Média: {}'.format(np.mean(waiting_right)))
+
+    print('\nTempo de utilização total da ponte: {}'.format(timing))
+
+    S = '\nTempo total de funcionamento do programa: {}'.format(program_time)
+    print(S)
 
 
 # Código que será executado
 def main():
+    program_time = time.time()
+    global program_end
     cv_bridge = Condition()
     cv_queue = Condition()
+
+    time_calculator = Thread(target=thread_time_calculator, args=(cv_bridge, ))
+    time_calculator.start()
+
     remove = Thread(target=thread_remove_cars, args=(cv_bridge, ))
     remove.start()
+
     bridge = Thread(target=thread_bridge, args=(cv_bridge, cv_queue))
     bridge.start()
+
     queue = Thread(target=thread_queue, args=(cv_queue, ))
     queue.start()
+
     bridge.join()
-    results()
+    program_end = True
+    with(cv_bridge):
+        cv_bridge.notify_all()
+    time_calculator.join()
+
+    current_time = time.time()
+    program_time = current_time - program_time
+    results(program_time)
 
 
 if(__name__ == '__main__'):
