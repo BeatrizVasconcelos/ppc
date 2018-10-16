@@ -30,3 +30,6 @@ class Bridge:
             self.direction = 'right'
         else:
             self.direction = 'left'
+
+    def set_direction(self, direction):
+        self.direction = direction
